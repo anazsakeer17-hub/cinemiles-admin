@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../api/supabaseClient'
 import { 
   Search, Filter, ShieldAlert, CheckCircle, 
   MoreVertical, Eye, ChevronDown
@@ -23,43 +22,41 @@ export default function Users() {
   const [filterLevel, setFilterLevel] = useState('')
   const [levelsList, setLevelsList] = useState([])
 
-  const [filterFraud, setFilterFraud] = useState('all') // 'all', 'clean', 'flagged'
+  const [filterFraud, setFilterFraud] = useState('all')
   
   const [page, setPage] = useState(1)
   const [totalUsers, setTotalUsers] = useState(0)
 
   const PAGE_SIZE = 10
 
-  // 1. Fetch available cities and levels on component mount
+  // Fetch filter dropdown data from backend
   useEffect(() => {
-    async function fetchFiltersData() {
-      // Fetch Cities
-      const { data: cityData } = await supabase
-        .from('cities')
-        .select('name')
-        .eq('is_active', true)
-        .order('priority', { ascending: false })
-        .order('name', { ascending: true })
+    async function fetchFilters() {
+      try {
+        const token = localStorage.getItem("admin_token")
 
-      if (cityData) setCitiesList(cityData.map(c => c.name))
+        const response = await fetch('/api/admin-filters', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
 
-      // Fetch Levels (Ordered by min_claps so they display in correct tier order)
-      const { data: levelData } = await supabase
-        .from('cinephile_levels')
-        .select('name')
-        .order('min_claps', { ascending: true })
+        const result = await response.json()
 
-      if (levelData) {
-        const fetchedLevels = levelData.map(l => l.name)
-        // Ensure "Viewer" is in the list as it's the default coalesce value in your SQL view
-        if (!fetchedLevels.includes('Viewer')) fetchedLevels.unshift('Viewer')
-        setLevelsList(fetchedLevels)
+        if (!response.ok) throw new Error(result.error)
+
+        setCitiesList(result.cities || [])
+        setLevelsList(result.levels || [])
+
+      } catch (err) {
+        console.error("Filter fetch error:", err)
       }
     }
-    fetchFiltersData()
+
+    fetchFilters()
   }, [])
 
-  // 2. Debounce Effect: Waits 500ms after typing stops before setting the search term
+  // Debounce Effect
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput)
@@ -67,12 +64,12 @@ export default function Users() {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  // 3. Reset to page 1 whenever search or ANY filter changes
+  // Reset page when filters change
   useEffect(() => {
     setPage(1)
   }, [debouncedSearch, filterCity, filterLevel, filterFraud])
 
-  // 4. Fetch Data whenever page, search, or filters change
+  // Fetch users
   useEffect(() => {
     fetchUsers()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,62 +78,37 @@ export default function Users() {
   async function fetchUsers() {
     setLoading(true)
 
-    const from = (page - 1) * PAGE_SIZE
-    const to = from + PAGE_SIZE - 1
+    try {
+      const token = localStorage.getItem("admin_token")
 
-    // Build the query
-    let query = supabase
-      .from('admin_users_overview')
-      .select('*', { count: 'exact' })
-      .order('id', { ascending: true })
-      .range(from, to)
+      const params = new URLSearchParams({
+        page,
+        pageSize: PAGE_SIZE,
+        search: debouncedSearch,
+        city: filterCity,
+        level: filterLevel,
+        fraud: filterFraud
+      })
 
-    // Apply Backend Search
-    if (debouncedSearch.trim()) {
-      const term = debouncedSearch.trim()
-      query = query.or(`name.ilike.%${term}%,email.ilike.%${term}%`)
+      const response = await fetch(`/api/admin-users?${params.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error)
+      }
+
+      setUsers(result.data || [])
+      setTotalUsers(result.count || 0)
+
+    } catch (err) {
+      console.error("User fetch error:", err)
     }
 
-    // Apply Backend City Filter
-    if (filterCity) {
-      query = query.eq('city', filterCity)
-    }
-
-    // Apply Backend Level Filter
-    if (filterLevel) {
-      query = query.eq('level_name', filterLevel)
-    }
-
-    // Apply Backend Fraud Filter
-    if (filterFraud === 'flagged') {
-      query = query.gt('fraud_count', 0)
-    } else if (filterFraud === 'clean') {
-      query = query.eq('fraud_count', 0)
-    }
-
-    const { data, error, count } = await query
-
-    if (error) {
-      console.error('Error fetching users:', error)
-      setLoading(false)
-      return
-    }
-
-    setTotalUsers(count || 0)
-
-    const formatted = data.map(u => ({
-      id: u.id,
-      name: u.name,
-      email: u.email,
-      city: u.city,
-      level: u.level_name || 'Viewer',
-      miles: u.miles_balance ?? 0,
-      claps: u.total_claps ?? 0,
-      fraudFlag: u.fraud_count > 0,
-      status: 'active'
-    }))
-
-    setUsers(formatted)
     setLoading(false)
   }
 
