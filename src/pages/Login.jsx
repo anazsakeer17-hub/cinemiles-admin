@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../api/supabaseClient'
 import { Mail, Lock, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import appLogo from '../assets/Images/app-icon.png'
 
@@ -15,47 +14,32 @@ export default function Login() {
   
   const navigate = useNavigate()
 
-  const handleLogin = async (e) => {
+ const handleLogin = async (e) => {
   e.preventDefault()
   setLoading(true)
   setError(null)
 
-  const { data, error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+  try {
+    const response = await fetch('/api/admin-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    })
 
-  if (error) {
-    setError(error.message)
-    setLoading(false)
-    return
-  }
+    const result = await response.json()
 
-  if (data.user) {
-    // 🔎 Fetch user role from public.users
-    const { data: userRow, error: roleError } = await supabase
-      .from('users')
-      .select('role')
-      .eq('auth_id', data.user.id)
-      .single()
-
-    if (roleError || !userRow) {
-      await supabase.auth.signOut()
-      setError("Access denied.")
-      setLoading(false)
-      return
+    if (!response.ok) {
+      throw new Error(result.error)
     }
 
-    // 🚫 BLOCK NON-ADMIN USERS
-    if (userRow.role !== 'admin') {
-      await supabase.auth.signOut()
-      setError("You are not authorized to access the admin panel.")
-      setLoading(false)
-      return
-    }
+    // Save token
+    localStorage.setItem('admin_token', result.access_token)
 
-    // ✅ Admin allowed
     navigate('/dashboard')
+  } catch (err) {
+    setError(err.message)
+  } finally {
+    setLoading(false)
   }
 }
 

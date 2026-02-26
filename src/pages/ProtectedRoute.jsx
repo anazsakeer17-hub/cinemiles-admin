@@ -1,39 +1,42 @@
 import { useEffect, useState } from "react"
 import { Navigate } from "react-router-dom"
-import { supabase } from "../api/supabaseClient"
 
 export default function ProtectedRoute({ children }) {
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [authorized, setAuthorized] = useState(false)
 
   useEffect(() => {
-    const checkRole = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
+    const verify = async () => {
+      const token = localStorage.getItem("admin_token")
 
-      if (!user) {
+      if (!token) {
         setLoading(false)
         return
       }
 
-      const { data } = await supabase
-        .from("users")
-        .select("role")
-        .eq("auth_id", user.id)
-        .single()
+      try {
+        const response = await fetch("/api/admin-verify", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
 
-      if (data?.role === "admin") {
-        setIsAdmin(true)
+        if (response.ok) {
+          setAuthorized(true)
+        }
+      } catch (err) {
+        console.error(err)
       }
 
       setLoading(false)
     }
 
-    checkRole()
+    verify()
   }, [])
 
   if (loading) return <div>Checking access...</div>
 
-  if (!isAdmin) {
+  if (!authorized) {
     return <Navigate to="/login" replace />
   }
 
