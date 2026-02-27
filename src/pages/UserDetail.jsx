@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import WalletTab from './WalletTab'
-import ClapsTab from './ClapsTab' 
-import TicketsTab from './TicketsTab'
-import RewardsTab from './RewardsTab'
-import EngagementTab from './EngagementTab' 
-import AuditTab from './AuditTab' // <-- Import the new component
+import WalletTab from '../pages/userdetails/WalletTab'
+import ClapsTab from '../pages/userdetails/ClapsTab' 
+import TicketsTab from '../pages/userdetails/TicketsTab'
+import RewardsTab from '../pages/userdetails/RewardsTab'
+import EngagementTab from '../pages/userdetails/EngagementTab' 
+import AuditTab from '../pages/userdetails/AuditTab' // <-- Import the new component
 import { 
   ArrowLeft, ShieldAlert, CheckCircle, Ban, 
   Wallet, Trophy, Ticket, Gift, Activity, 
